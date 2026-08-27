@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
@@ -5,14 +6,11 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use super::types::AudioSpec;
 
-/// Basic CPAL audio output device.
-///
-/// This is the first layer between AURELIS's PCM pipeline
-/// and the system audio device.
+/// Real-time PCM audio output backed by CPAL.
 pub struct AudioOutput {
     stream: cpal::Stream,
     spec: AudioSpec,
-    buffer: Arc<Mutex<Vec<f32>>>,
+    buffer: Arc<Mutex<VecDeque<f32>>>,
 }
 
 impl AudioOutput {
@@ -26,10 +24,28 @@ impl AudioOutput {
 
         let supported_config = device.default_output_config()?;
 
+        if supported_config.channels() != spec.channels as u16 {
+            return Err(format!(
+                "Channel mismatch: AURELIS requires {}, device provides {}",
+                spec.channels,
+                supported_config.channels()
+            )
+            .into());
+        }
+
+        if supported_config.sample_rate() != spec.sample_rate {
+            return Err(format!(
+                "Sample rate mismatch: AURELIS requires {} Hz, device provides {} Hz",
+                spec.sample_rate,
+                supported_config.sample_rate()
+            )
+            .into());
+        }
+
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
 
-        let buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
+        let buffer = Arc::new(Mutex::new(VecDeque::<f32>::new()));
         let callback_buffer = Arc::clone(&buffer);
 
         let stream = match sample_format {
@@ -61,7 +77,7 @@ impl AudioOutput {
         })
     }
 
-    /// Return the audio specification requested by AURELIS.
+    /// Return the audio specification used by this output.
     pub const fn spec(&self) -> AudioSpec {
         self.spec
     }
@@ -69,7 +85,7 @@ impl AudioOutput {
     /// Queue PCM samples for playback.
     pub fn push_samples(&self, samples: &[f32]) {
         if let Ok(mut buffer) = self.buffer.lock() {
-            buffer.extend_from_slice(samples);
+            buffer.extend(samples.iter().copied());
         }
     }
 
@@ -81,25 +97,18 @@ impl AudioOutput {
             .unwrap_or(0)
     }
 
-    /// Keep the CPAL stream alive.
+    /// Check that the output stream is alive.
     pub fn is_running(&self) -> bool {
         let _ = &self.stream;
         true
     }
 }
 
-fn fill_output(output: &mut [f32], buffer: &Arc<Mutex<Vec<f32>>>) {
+fn fill_output(output: &mut [f32], buffer: &Arc<Mutex<VecDeque<f32>>>) {
     if let Ok(mut buffer) = buffer.lock() {
-        let samples_to_copy = output.len().min(buffer.len());
-
-        output[..samples_to_copy]
-            .copy_from_slice(&buffer[..samples_to_copy]);
-
-        if samples_to_copy < output.len() {
-            output[samples_to_copy..].fill(0.0);
+        for sample in output.iter_mut() {
+            *sample = buffer.pop_front().unwrap_or(0.0);
         }
-
-        buffer.drain(..samples_to_copy);
     } else {
         output.fill(0.0);
     }
