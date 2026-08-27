@@ -15,15 +15,12 @@ fn main() {
 
     match aurelis_core::audio::decoder::decode_file(&path) {
         Ok(audio) => {
-            let duration = audio.samples.len() as f64
-                / audio.spec.channels as f64
-                / audio.spec.sample_rate as f64;
-
             println!("Decoded successfully.");
             println!("Sample rate : {} Hz", audio.spec.sample_rate);
             println!("Channels    : {}", audio.spec.channels);
+            println!("Frames      : {}", audio.frame_count());
             println!("Samples     : {}", audio.samples.len());
-            println!("Duration    : {:.2} seconds", duration);
+            println!("Duration    : {:.2} seconds", audio.duration_seconds());
         }
 
         Err(error) => {

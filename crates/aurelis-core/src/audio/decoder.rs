@@ -10,19 +10,15 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::default::{get_codecs, get_probe};
 
-use super::types::AudioSpec;
-
-pub struct DecodedAudio {
-    pub spec: AudioSpec,
-    pub samples: Vec<f32>,
-}
+use super::types::{AudioSpec, PcmBuffer};
 
 pub fn decode_file<P: AsRef<Path>>(
     path: P,
-) -> Result<DecodedAudio, Box<dyn std::error::Error>> {
+) -> Result<PcmBuffer, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
 
-    let media_source = MediaSourceStream::new(Box::new(file), Default::default());
+    let media_source =
+        MediaSourceStream::new(Box::new(file), Default::default());
 
     let hint = Hint::new();
 
@@ -40,21 +36,24 @@ pub fn decode_file<P: AsRef<Path>>(
         .ok_or("No audio track found")?;
 
     let track_id = track.id;
-
     let codec_params = track.codec_params.clone();
 
     let mut decoder =
         get_codecs().make(&codec_params, &DecoderOptions::default())?;
 
-    let mut samples = Vec::new();
+    let initial_sample_rate = codec_params
+        .sample_rate
+        .ok_or("Missing sample rate")?;
 
-    let mut spec = AudioSpec::new(
-        codec_params.sample_rate.ok_or("Missing sample rate")?,
-        codec_params
-            .channels
-            .ok_or("Missing channel information")?
-            .count(),
-    );
+    let initial_channels = codec_params
+        .channels
+        .ok_or("Missing channel information")?
+        .count();
+
+    let mut spec =
+        AudioSpec::new(initial_sample_rate, initial_channels);
+
+    let mut samples = Vec::new();
 
     loop {
         let packet = match format.next_packet() {
@@ -96,8 +95,5 @@ pub fn decode_file<P: AsRef<Path>>(
         samples.extend_from_slice(buffer.samples());
     }
 
-    Ok(DecodedAudio {
-        spec,
-        samples,
-    })
+    Ok(PcmBuffer::new(spec, samples))
 }
