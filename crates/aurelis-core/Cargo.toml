@@ -6,4 +6,5 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+cpal = "0.18.2"
 symphonia = { version = "0.5", features = ["all"] }
