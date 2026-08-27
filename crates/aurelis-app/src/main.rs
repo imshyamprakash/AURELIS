@@ -13,18 +13,50 @@ fn main() {
 
     println!("Opening: {path}");
 
-    match aurelis_core::audio::decoder::decode_file(&path) {
-        Ok(audio) => {
-            println!("Decoded successfully.");
-            println!("Sample rate : {} Hz", audio.spec.sample_rate);
-            println!("Channels    : {}", audio.spec.channels);
-            println!("Frames      : {}", audio.frame_count());
-            println!("Samples     : {}", audio.samples.len());
-            println!("Duration    : {:.2} seconds", audio.duration_seconds());
-        }
+    let mut decoder =
+        match aurelis_core::audio::AudioDecoder::open(&path) {
+            Ok(decoder) => decoder,
+            Err(error) => {
+                eprintln!("Failed to open audio: {error}");
+                return;
+            }
+        };
 
+    let spec = decoder.spec();
+
+    println!("Audio opened successfully.");
+    println!("Sample rate : {} Hz", spec.sample_rate);
+    println!("Channels    : {}", spec.channels);
+    println!("Chunk size  : {} frames", decoder.chunk_frames());
+
+    let mut chunk_count = 0usize;
+    let mut total_frames = 0usize;
+
+    while let Some(chunk) = match decoder.next_chunk() {
+        Ok(chunk) => chunk,
         Err(error) => {
-            eprintln!("Failed to decode audio: {error}");
+            eprintln!("Decoding error: {error}");
+            return;
+        }
+    } {
+        chunk_count += 1;
+        total_frames += chunk.frame_count();
+
+        if chunk_count <= 3 || chunk_count % 100 == 0 {
+            println!(
+                "Chunk {:>4}: {:>6} frames",
+                chunk_count,
+                chunk.frame_count()
+            );
         }
     }
+
+    let duration = total_frames as f64 / spec.sample_rate as f64;
+
+    println!();
+    println!("Streaming decode complete.");
+    println!("Chunks      : {}", chunk_count);
+    println!("Total frames: {}", total_frames);
+    println!("Duration    : {:.2} seconds", duration);
+    println!("Finished    : {}", decoder.is_finished());
 }

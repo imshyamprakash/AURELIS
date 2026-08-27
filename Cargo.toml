@@ -3,6 +3,7 @@ members = [
     "crates/aurelis-core",
     "crates/aurelis-app",
 ]
+
 resolver = "3"
 
 [workspace.package]
