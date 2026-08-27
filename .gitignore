@@ -1,0 +1,16 @@
+# Rust build artifacts
+/target/
+
+# IDE settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Rust tooling
+*.pdb
+
+# Temporary files
+*.tmp
+*.temp
