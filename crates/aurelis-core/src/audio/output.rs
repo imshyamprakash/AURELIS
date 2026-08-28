@@ -14,7 +14,34 @@ pub struct AudioOutput {
 }
 
 impl AudioOutput {
+    /// Query the default output device's native format without opening a
+    /// stream.
+    ///
+    /// Use this before deciding whether a resampler is needed: compare the
+    /// decoder's [`AudioSpec`] against this one. If they differ, build an
+    /// `AudioResampler` targeting this spec and open `AudioOutput` with
+    /// this spec too, since `AudioOutput::open` will reject anything the
+    /// device doesn't natively support.
+    pub fn default_device_spec() -> Result<AudioSpec, Box<dyn Error>> {
+        let host = cpal::default_host();
+
+        let device = host
+            .default_output_device()
+            .ok_or("No default audio output device found")?;
+
+        let supported_config = device.default_output_config()?;
+
+        Ok(AudioSpec::new(
+            supported_config.sample_rate(),
+            supported_config.channels() as usize,
+        ))
+    }
+
     /// Open the system's default output device.
+    ///
+    /// `spec` must exactly match the device's native sample rate and
+    /// channel count. Query [`AudioOutput::default_device_spec`] first and
+    /// resample to that spec if your source doesn't already match it.
     pub fn open(spec: AudioSpec) -> Result<Self, Box<dyn Error>> {
         let host = cpal::default_host();
 
