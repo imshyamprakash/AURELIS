@@ -128,9 +128,8 @@ fn main() {
 
         if chunk_count <= 3 || chunk_count % 100 == 0 {
             println!(
-                "Chunk {:>4}: {:>6} source frames -> {:>6} output frames | queued: {:>8} samples",
+                "Chunk {:>4}: {:>6} output frames | queued: {:>8} samples",
                 chunk_count,
-                to_play.frame_count().max(0),
                 to_play.frame_count(),
                 output.pending_samples()
             );
@@ -166,6 +165,14 @@ fn main() {
 
     while output.pending_samples() > 0 {
         thread::sleep(Duration::from_millis(50));
+    }
+
+    let underruns = output.underrun_count();
+
+    if underruns > 0 {
+        println!(
+            "Underrun events   : {underruns} (decode/resample fell behind playback)"
+        );
     }
 
     println!("Playback complete.");
